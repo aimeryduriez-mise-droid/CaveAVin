@@ -2,7 +2,6 @@
 // Cette fonction s'exécute côté serveur : votre clé API n'est jamais exposée au navigateur.
 
 export default async function handler(req, res) {
-  // Autoriser uniquement les requêtes POST
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Méthode non autorisée" });
   }
@@ -18,6 +17,7 @@ export default async function handler(req, res) {
         "Content-Type": "application/json",
         "x-api-key": process.env.ANTHROPIC_API_KEY,
         "anthropic-version": "2023-06-01",
+        "anthropic-beta": "web-search-2025-03-05",
       },
       body: JSON.stringify(req.body),
     });
@@ -30,7 +30,6 @@ export default async function handler(req, res) {
   }
 }
 
-// Augmente la limite de taille du body à 10MB (pour les images base64)
 export const config = {
   api: { bodyParser: { sizeLimit: "10mb" } },
 };
