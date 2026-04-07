@@ -196,15 +196,95 @@ export default function CaveAVin(){
   const typeToColor=t=>({Rouge:"#6b1520",Blanc:"#d4a843",Rosé:"#c4607a",Effervescent:"#7a8fc8",Doux:"#a87a3a"}[t]||"#6b1520");
   const typeColor=t=>({Rouge:"#8b2535",Blanc:"#c8a832",Rosé:"#d4607a",Effervescent:"#7a8fc8",Doux:"#a87a3a"}[t]||G.muted);
 
+  // ── Récupération du prix marché via web search ────────────────────────────
+  const fetchMarketPrice = async (bottle) => {
+    if (!bottle.nom) return;
+    try {
+      const d = await callClaude({
+        model: "claude-sonnet-4-20250514", max_tokens: 400,
+        tools: [{ type: "web_search_20250305", name: "web_search" }],
+        system: "Tu es un expert en prix de vins. Recherche le prix marché actuel de la bouteille demandée. Réponds UNIQUEMENT en JSON valide, sans backticks.",
+        messages: [{
+          role: "user",
+          content: `Recherche le prix moyen actuel de ce vin : "${bottle.nom}" ${bottle.domaine ? `de ${bottle.domaine}` : ""} millésime ${bottle.millesime || "NM"}.
+Cherche sur des sites comme Wine-Searcher, Idealwine, iDealwine, La Place de Bordeaux, Cavissima, etc.
+Retourne UNIQUEMENT ce JSON :
+{
+  "prix_moyen": null,
+  "prix_min": null,
+  "prix_max": null,
+  "devise": "EUR",
+  "source": "",
+  "date": ""
+}
+Les prix sont par bouteille en euros. null si introuvable.`
+        }]
+      });
+      // Extraire le dernier bloc text de la réponse (après web search)
+      const textBlock = d.content?.filter(c => c.type === "text").pop();
+      if (!textBlock) return;
+      const txt = textBlock.text || "{}";
+      const prix = JSON.parse(txt.replace(/```json|```/g, "").trim());
+      setBottles(prev => prev.map(b =>
+        b.id === bottle.id ? { ...b, prixMarche: prix } : b
+      ));
+      setSelected(prev => prev?.id === bottle.id ? { ...prev, prixMarche: prix } : prev);
+    } catch (e) {
+      console.error("Erreur prix marché:", e);
+    }
+  };
+  const fetchCriticRatings = async (bottle) => {
+    if(!bottle.nom) return;
+    try {
+      const d = await callClaude({
+        model:"claude-sonnet-4-20250514", max_tokens:600,
+        system:"Tu es une encyclopédie vinicole experte. Réponds UNIQUEMENT en JSON valide, sans backticks ni texte autour.",
+        messages:[{role:"user", content:`Donne-moi les notes des grands critiques pour ce vin :
+Nom: "${bottle.nom}", Domaine: "${bottle.domaine}", Millésime: ${bottle.millesime||"NM"}, Région: "${bottle.region}", Appellation: "${bottle.appellation}".
+
+Retourne UNIQUEMENT ce JSON (null si note inconnue) :
+{
+  "parker": null,
+  "winespectator": null,
+  "decanter": null,
+  "suckling": null,
+  "bettanedesseauve": null,
+  "resume": ""
+}
+Les notes Parker/Suckling/WineSpectator sont sur 100, Decanter sur 100, Bettane&Desseauve sur 20.
+Le "resume" est une phrase de 1-2 lignes synthétisant le consensus des critiques sur ce vin et millésime (en français). Si le vin est peu connu ou le millésime non noté, dis-le en 1 phrase.`}]
+      });
+      const txt = d.content?.[0]?.text||"{}";
+      const ratings = JSON.parse(txt.replace(/```json|```/g,"").trim());
+      // Met à jour la bouteille avec les notes critiques
+      setBottles(prev => prev.map(b =>
+        b.id === bottle.id ? {...b, critiques: ratings} : b
+      ));
+      // Met à jour la vue détail si on y est
+      setSelected(prev => prev?.id === bottle.id ? {...prev, critiques: ratings} : prev);
+    } catch(e) {
+      console.error("Erreur récupération critiques:", e);
+    }
+  };
+
   const saveBottle=()=>{
     if(!form.nom)return showToast("Le nom est requis","error");
     if(view==="edit"){
       const u={...form,quantite:+form.quantite||1,prix:+form.prix||0,note:+form.note||3};
       setBottles(p=>p.map(b=>b.id===form.id?u:b));setSelected(u);
       showToast("Bouteille mise à jour !");setView("detail");
+      // Rafraîchit les notes si le nom/millésime a changé
+      fetchCriticRatings(u);
+      fetchMarketPrice(u);
     }else{
-      setBottles(p=>[{...form,id:Date.now(),millesime:form.millesime||null,quantite:+form.quantite||1,prix:+form.prix||0,note:+form.note||3},...p]);
-      showToast("Bouteille ajoutée à votre cave !");setPrefilled(false);setView("cave");
+      const newBottle={...form,id:Date.now(),millesime:form.millesime||null,quantite:+form.quantite||1,prix:+form.prix||0,note:+form.note||3};
+      setBottles(p=>[newBottle,...p]);
+      showToast("Bouteille ajoutée — notes critiques en cours…");
+      setPrefilled(false);
+      setView("cave");
+      // Récupère les notes automatiquement en arrière-plan
+      fetchCriticRatings(newBottle);
+      fetchMarketPrice(newBottle);
     }
   };
   const deleteBottle=id=>{setBottles(p=>p.filter(b=>b.id!==id));showToast("Bouteille supprimée");setView("cave");};
@@ -485,11 +565,116 @@ export default function CaveAVin(){
             ))}
           </div>
           {b.commentaire&&(
-            <div style={{background:G.surface,border:`1px solid ${G.border}`,borderRadius:16,padding:"16px",marginBottom:20}}>
+            <div style={{background:G.surface,border:`1px solid ${G.border}`,borderRadius:16,padding:"16px",marginBottom:16}}>
               <div style={{color:G.gold,fontFamily:"'Jost'",fontSize:11,letterSpacing:1,textTransform:"uppercase",marginBottom:8}}>Mes notes</div>
               <p style={{color:G.cream,fontFamily:"'Cormorant Garamond'",fontSize:17,fontStyle:"italic",margin:0,lineHeight:1.6}}>"{b.commentaire}"</p>
             </div>
           )}
+
+          {/* ── Prix marché ── */}
+          <div style={{background:G.surface,border:`1px solid ${G.border}`,borderRadius:16,padding:"16px",marginBottom:16}}>
+            <div style={{color:G.gold,fontFamily:"'Jost'",fontSize:11,letterSpacing:1,textTransform:"uppercase",marginBottom:12}}>Prix marché</div>
+            {!b.prixMarche ? (
+              <div style={{display:"flex",alignItems:"center",gap:10,color:G.muted,fontFamily:"'Jost'",fontSize:13}}>
+                <div style={{width:16,height:16,borderRadius:"50%",border:`2px solid ${G.muted}`,borderTopColor:"transparent",animation:"spin 1s linear infinite",flexShrink:0}}/>
+                Recherche en cours…
+              </div>
+            ) : b.prixMarche.prix_moyen ? (
+              <>
+                <div style={{display:"flex",alignItems:"baseline",gap:16,marginBottom:8}}>
+                  <div>
+                    <div style={{color:G.muted,fontFamily:"'Jost'",fontSize:10,letterSpacing:1,textTransform:"uppercase",marginBottom:2}}>Prix moyen</div>
+                    <div style={{color:G.cream,fontFamily:"'Cormorant Garamond'",fontSize:28,fontWeight:600,lineHeight:1}}>
+                      {b.prixMarche.prix_moyen}
+                      <span style={{fontSize:16,color:G.muted}}> €</span>
+                    </div>
+                  </div>
+                  {b.prixMarche.prix_min && b.prixMarche.prix_max && (
+                    <div>
+                      <div style={{color:G.muted,fontFamily:"'Jost'",fontSize:10,letterSpacing:1,textTransform:"uppercase",marginBottom:2}}>Fourchette</div>
+                      <div style={{color:G.muted,fontFamily:"'Cormorant Garamond'",fontSize:16}}>
+                        {b.prixMarche.prix_min}€ – {b.prixMarche.prix_max}€
+                      </div>
+                    </div>
+                  )}
+                </div>
+                {/* Comparaison avec prix d'achat */}
+                {b.prix > 0 && b.prixMarche.prix_moyen && (()=>{
+                  const diff = Math.round(((b.prixMarche.prix_moyen - b.prix) / b.prix) * 100);
+                  const positif = diff >= 0;
+                  return (
+                    <div style={{display:"inline-flex",alignItems:"center",gap:6,background:positif?"#e6f5ed":"#fdf0f0",border:`1px solid ${positif?"#a8d4bc":"#f0b8b8"}`,borderRadius:20,padding:"4px 12px",marginBottom:8}}>
+                      <span style={{color:positif?G.green:G.red,fontFamily:"'Jost'",fontSize:12,fontWeight:500}}>
+                        {positif?"▲":"▼"} {Math.abs(diff)}% {positif?"de plus-value":"en dessous du marché"}
+                      </span>
+                    </div>
+                  );
+                })()}
+                {b.prixMarche.source && (
+                  <div style={{color:G.muted,fontFamily:"'Jost'",fontSize:11,marginTop:4}}>
+                    Source : {b.prixMarche.source}
+                    {b.prixMarche.date ? ` · ${b.prixMarche.date}` : ""}
+                  </div>
+                )}
+                <button onClick={()=>fetchMarketPrice(b)} style={{marginTop:10,background:"transparent",border:`1px solid ${G.border}`,borderRadius:8,padding:"6px 12px",color:G.muted,fontFamily:"'Jost'",fontSize:11,cursor:"pointer",display:"flex",alignItems:"center",gap:6}}>
+                  <Icon name="refresh" size={12} color={G.muted}/>Actualiser le prix
+                </button>
+              </>
+            ) : (
+              <div style={{display:"flex",flexDirection:"column",gap:8}}>
+                <p style={{color:G.muted,fontFamily:"'Cormorant Garamond'",fontSize:15,fontStyle:"italic",margin:0}}>Prix introuvable pour ce vin.</p>
+                <button onClick={()=>fetchMarketPrice(b)} style={{alignSelf:"flex-start",background:"transparent",border:`1px solid ${G.border}`,borderRadius:8,padding:"6px 12px",color:G.muted,fontFamily:"'Jost'",fontSize:11,cursor:"pointer",display:"flex",alignItems:"center",gap:6}}>
+                  <Icon name="refresh" size={12} color={G.muted}/>Réessayer
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* ── Notes des critiques ── */}
+          <div style={{background:G.surface,border:`1px solid ${G.border}`,borderRadius:16,padding:"16px",marginBottom:20}}>
+            <div style={{color:G.gold,fontFamily:"'Jost'",fontSize:11,letterSpacing:1,textTransform:"uppercase",marginBottom:12}}>Notes des critiques</div>
+            {!b.critiques ? (
+              <div style={{display:"flex",alignItems:"center",gap:10,color:G.muted,fontFamily:"'Jost'",fontSize:13}}>
+                <div style={{width:16,height:16,borderRadius:"50%",border:`2px solid ${G.muted}`,borderTopColor:"transparent",animation:"spin 1s linear infinite",flexShrink:0}}/>
+                Récupération en cours…
+              </div>
+            ) : (
+              <>
+                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:12}}>
+                  {[
+                    {label:"Robert Parker", key:"parker", max:100, color:"#8b2535"},
+                    {label:"Wine Spectator", key:"winespectator", max:100, color:"#1a4a7a"},
+                    {label:"Decanter", key:"decanter", max:100, color:"#c4607a"},
+                    {label:"James Suckling", key:"suckling", max:100, color:"#2e6a3a"},
+                    {label:"Bettane & Desseauve", key:"bettanedesseauve", max:20, color:"#7a5a2a"},
+                  ].filter(({key})=>b.critiques[key]!==null&&b.critiques[key]!==undefined).map(({label,key,max,color})=>(
+                    <div key={key} style={{background:"#fff",border:`1px solid ${G.border}`,borderRadius:10,padding:"10px 12px"}}>
+                      <div style={{color:G.muted,fontFamily:"'Jost'",fontSize:10,letterSpacing:0.5,marginBottom:4}}>{label}</div>
+                      <div style={{display:"flex",alignItems:"baseline",gap:3}}>
+                        <span style={{color,fontFamily:"'Cormorant Garamond'",fontSize:24,fontWeight:600,lineHeight:1}}>{b.critiques[key]}</span>
+                        <span style={{color:G.muted,fontFamily:"'Jost'",fontSize:11}}>/{max}</span>
+                      </div>
+                      {/* Barre de progression */}
+                      <div style={{marginTop:6,height:3,background:G.border,borderRadius:2,overflow:"hidden"}}>
+                        <div style={{height:"100%",width:`${(b.critiques[key]/max)*100}%`,background:color,borderRadius:2}}/>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                {b.critiques.resume&&(
+                  <p style={{color:G.muted,fontFamily:"'Cormorant Garamond'",fontSize:15,fontStyle:"italic",margin:0,lineHeight:1.6,borderTop:`1px solid ${G.border}`,paddingTop:10}}>
+                    {b.critiques.resume}
+                  </p>
+                )}
+                {Object.entries(b.critiques).filter(([k,v])=>k!=="resume"&&v!==null).length===0&&(
+                  <p style={{color:G.muted,fontFamily:"'Cormorant Garamond'",fontSize:15,fontStyle:"italic",margin:0}}>{b.critiques.resume||"Aucune note disponible pour ce vin."}</p>
+                )}
+                <button onClick={()=>fetchCriticRatings(b)} style={{marginTop:10,background:"transparent",border:`1px solid ${G.border}`,borderRadius:8,padding:"6px 12px",color:G.muted,fontFamily:"'Jost'",fontSize:11,cursor:"pointer",display:"flex",alignItems:"center",gap:6}}>
+                  <Icon name="refresh" size={12} color={G.muted}/>Actualiser
+                </button>
+              </>
+            )}
+          </div>
           <div style={{display:"flex",gap:10}}>
             <button onClick={()=>{setForm({...b});setView("edit");}}style={{flex:1,background:G.gold,border:"none",borderRadius:12,padding:"14px",color:"#fff",fontFamily:"'Jost'",fontSize:14,fontWeight:500,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>
               <Icon name="edit"size={16}color="#fff"/>Modifier
