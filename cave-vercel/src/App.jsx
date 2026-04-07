@@ -1,16 +1,16 @@
 import { useState, useRef, useEffect, useCallback } from "react";
-
+ 
 // ─── URL du backend (proxy Vite en dev, même origine en prod) ────────────────
 const API = "/api/claude";
-
+ 
 const fonts = `@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;1,400;1,600&family=Jost:wght@300;400;500&display=swap');`;
-
+ 
 const G = {
   bg:"#ffffff",surface:"#f7f3ef",card:"#ffffff",border:"#e8ddd4",
   gold:"#b8922e",goldLight:"#d4a84a",cream:"#2a1f14",muted:"#9a8878",
   red:"#8b2535",redLight:"#b83045",green:"#2e8a5a",greenDark:"#e6f5ed",
 };
-
+ 
 const Icon=({name,size=20,color=G.cream})=>{
   const p={stroke:color,strokeWidth:"1.5",fill:"none"};
   const icons={
@@ -33,19 +33,19 @@ const Icon=({name,size=20,color=G.cream})=>{
   };
   return icons[name]||null;
 };
-
+ 
 // ─── Données de démonstration (utilisées uniquement si cave vide) ─────────────
 const DEMO = [
   {id:1,nom:"Château Margaux",domaine:"Château Margaux",region:"Bordeaux",appellation:"Margaux",millesime:2015,type:"Rouge",cepages:"Cabernet Sauvignon, Merlot",quantite:3,prix:890,note:5,garde:"2030-2050",commentaire:"Exceptionnel. Notes de cassis, violette et tabac.",couleur:"#6b1520"},
   {id:2,nom:"Puligny-Montrachet",domaine:"Domaine Leflaive",region:"Bourgogne",appellation:"Puligny-Montrachet",millesime:2019,type:"Blanc",cepages:"Chardonnay",quantite:6,prix:145,note:4,garde:"2024-2032",commentaire:"Minéralité pure, fleurs blanches, beurre frais.",couleur:"#d4a843"},
   {id:3,nom:"Hermitage",domaine:"M. Chapoutier",region:"Rhône",appellation:"Hermitage",millesime:2017,type:"Rouge",cepages:"Syrah",quantite:2,prix:78,note:4,garde:"2025-2040",commentaire:"Poivre noir, olive, cuir. Grande longueur.",couleur:"#4a1528"},
 ];
-
+ 
 const TYPES=["Rouge","Blanc","Rosé","Effervescent","Doux","Autre"];
 const REGIONS=["Bordeaux","Bourgogne","Rhône","Loire","Alsace","Champagne","Languedoc","Provence","Sud-Ouest","Autre"];
 const BLANK={nom:"",domaine:"",region:"",appellation:"",millesime:new Date().getFullYear(),type:"Rouge",cepages:"",quantite:1,prix:"",note:3,garde:"",commentaire:"",couleur:"#6b1520"};
 const LS_KEY="cave-a-vin-v1";
-
+ 
 // ─── Appel backend ────────────────────────────────────────────────────────────
 const callClaude = async (payload) => {
   const res = await fetch(API, {
@@ -55,7 +55,7 @@ const callClaude = async (payload) => {
   });
   return res.json();
 };
-
+ 
 export default function CaveAVin(){
   // ── État ────────────────────────────────────────────────────────────────
   const [bottles, setBottles] = useState(() => {
@@ -64,7 +64,7 @@ export default function CaveAVin(){
       return saved ? JSON.parse(saved) : DEMO;
     } catch { return DEMO; }
   });
-
+ 
   const [view,setView]=useState("cave");
   const [selected,setSelected]=useState(null);
   const [form,setForm]=useState({});
@@ -83,21 +83,21 @@ export default function CaveAVin(){
   const [extracting,setExtracting]=useState(false);
   const [captured,setCaptured]=useState(null);
   const [prefilled,setPrefilled]=useState(false);
-
+ 
   // ── Persistance localStorage ─────────────────────────────────────────────
   useEffect(() => {
     try { localStorage.setItem(LS_KEY, JSON.stringify(bottles)); } catch {}
   }, [bottles]);
-
+ 
   const showToast=(msg,type="success")=>{setToast({msg,type});setTimeout(()=>setToast(null),2800);};
-
+ 
   // ── Caméra ───────────────────────────────────────────────────────────────
   const stopCamera=useCallback(()=>{
     if(intervalRef.current)clearInterval(intervalRef.current);
     if(streamRef.current){streamRef.current.getTracks().forEach(t=>t.stop());streamRef.current=null;}
     setScanStatus("idle");setScannedCode(null);setCaptured(null);setCamError(null);
   },[]);
-
+ 
   const startCamera=useCallback(async()=>{
     setCamError(null);
     try{
@@ -106,7 +106,7 @@ export default function CaveAVin(){
       if(videoRef.current){videoRef.current.srcObject=s;await videoRef.current.play();}
     }catch{setCamError("Impossible d'accéder à la caméra. Autorisez l'accès dans votre navigateur.");}
   },[]);
-
+ 
   const startBarcodeScan=useCallback(()=>{
     if(!("BarcodeDetector"in window)){setScanStatus("unsupported");return;}
     const det=new window.BarcodeDetector({formats:["ean_13","ean_8","upc_a","upc_e","code_128","code_39"]});
@@ -124,14 +124,14 @@ export default function CaveAVin(){
       }catch{}
     },400);
   },[]);
-
+ 
   useEffect(()=>{
     if(view==="barcode"){startCamera().then(()=>setTimeout(startBarcodeScan,800));}
     else if(view==="label"){startCamera();}
     else{stopCamera();}
     return()=>stopCamera();
   },[view]);
-
+ 
   // ── Scan code-barres ─────────────────────────────────────────────────────
   const lookupBarcode=async(code)=>{
     setExtracting(true);
@@ -161,7 +161,7 @@ export default function CaveAVin(){
     setView("form");
     showToast("Données trouvées — vérifiez avant d'enregistrer !");
   };
-
+ 
   // ── Photo étiquette ──────────────────────────────────────────────────────
   const captureLabel=async()=>{
     if(!videoRef.current)return;
@@ -181,7 +181,7 @@ export default function CaveAVin(){
       });
       const txt=d.content?.[0]?.text||"{}";
       const json=JSON.parse(txt.replace(/```json|```/g,"").trim());
-      setForm({...BLANK,...json,quantite:1,note:3,couleur:typeToColor(json.type)});
+      setForm({...BLANK,...json,quantite:1,note:3,couleur:typeToColor(json.type),etiquette:b64});
       setPrefilled(true);
       showToast("Étiquette analysée — vérifiez et complétez !");
       setView("form");
@@ -191,11 +191,11 @@ export default function CaveAVin(){
     }
     setExtracting(false);
   };
-
+ 
   // ── Helpers ──────────────────────────────────────────────────────────────
   const typeToColor=t=>({Rouge:"#6b1520",Blanc:"#d4a843",Rosé:"#c4607a",Effervescent:"#7a8fc8",Doux:"#a87a3a"}[t]||"#6b1520");
   const typeColor=t=>({Rouge:"#8b2535",Blanc:"#c8a832",Rosé:"#d4607a",Effervescent:"#7a8fc8",Doux:"#a87a3a"}[t]||G.muted);
-
+ 
   // ── Récupération du prix marché via web search ────────────────────────────
   const fetchMarketPrice = async (bottle) => {
     if (!bottle.nom) return;
@@ -241,7 +241,7 @@ Les prix sont par bouteille en euros. null si introuvable.`
         system:"Tu es une encyclopédie vinicole experte. Réponds UNIQUEMENT en JSON valide, sans backticks ni texte autour.",
         messages:[{role:"user", content:`Donne-moi les notes des grands critiques pour ce vin :
 Nom: "${bottle.nom}", Domaine: "${bottle.domaine}", Millésime: ${bottle.millesime||"NM"}, Région: "${bottle.region}", Appellation: "${bottle.appellation}".
-
+ 
 Retourne UNIQUEMENT ce JSON (null si note inconnue) :
 {
   "parker": null,
@@ -266,7 +266,7 @@ Le "resume" est une phrase de 1-2 lignes synthétisant le consensus des critique
       console.error("Erreur récupération critiques:", e);
     }
   };
-
+ 
   const saveBottle=()=>{
     if(!form.nom)return showToast("Le nom est requis","error");
     if(view==="edit"){
@@ -288,7 +288,7 @@ Le "resume" est une phrase de 1-2 lignes synthétisant le consensus des critique
     }
   };
   const deleteBottle=id=>{setBottles(p=>p.filter(b=>b.id!==id));showToast("Bouteille supprimée");setView("cave");};
-
+ 
   const Stars=({n,size=14})=><div style={{display:"flex",gap:2}}>{[1,2,3,4,5].map(i=><span key={i}><Icon name={i<=n?"star":"starE"}size={size}color={G.gold}/></span>)}</div>;
   const Tag=({c,ch})=><span style={{background:c+"22",border:`1px solid ${c}44`,color:c,borderRadius:20,padding:"2px 10px",fontSize:11,fontFamily:"'Jost'",fontWeight:500,letterSpacing:1,textTransform:"uppercase"}}>{ch}</span>;
   const inp={background:G.surface,border:`1px solid ${G.border}`,borderRadius:8,color:G.cream,padding:"10px 12px",fontFamily:"'Jost'",fontSize:14,width:"100%",boxSizing:"border-box",outline:"none"};
@@ -302,14 +302,14 @@ Le "resume" est une phrase de 1-2 lignes synthétisant le consensus des critique
       :<input type={type}value={form[field]??""}min={min}max={max}onChange={e=>setForm(p=>({...p,[field]:e.target.value}))}style={inp}/>}
     </div>
   );
-
+ 
   const filtered=bottles.filter(b=>{
     const q=search.toLowerCase();
     return(b.nom.toLowerCase().includes(q)||b.domaine.toLowerCase().includes(q)||b.region.toLowerCase().includes(q))&&(filterType==="Tous"||b.type===filterType);
   });
-
+ 
   // ── Vues ─────────────────────────────────────────────────────────────────
-
+ 
   const ViewCave=()=>(
     <div style={{flex:1,overflowY:"auto",padding:"0 16px 100px"}}>
       <div style={{padding:"24px 0 16px",textAlign:"center"}}>
@@ -330,9 +330,15 @@ Le "resume" est une phrase de 1-2 lignes synthétisant le consensus des critique
         {filtered.length===0&&<div style={{textAlign:"center",padding:"40px 0",color:G.muted,fontFamily:"'Cormorant Garamond'",fontSize:20,fontStyle:"italic"}}>Aucune bouteille trouvée</div>}
         {filtered.map(b=>(
           <div key={b.id}onClick={()=>{setSelected(b);setView("detail");}}style={{background:G.card,border:`1px solid ${G.border}`,borderRadius:16,padding:"14px 16px",cursor:"pointer",display:"flex",gap:14,alignItems:"center",boxShadow:"0 1px 8px rgba(60,30,10,0.06)"}}>
-            <div style={{width:48,height:48,borderRadius:12,background:`linear-gradient(135deg,${b.couleur},${b.couleur}88)`,flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center",border:`1px solid ${b.couleur}44`}}>
-              <Icon name="wine"size={22}color="rgba(255,255,255,0.7)"/>
-            </div>
+            {b.etiquette ? (
+              <div style={{width:48,height:48,borderRadius:12,overflow:"hidden",flexShrink:0,border:`1px solid ${G.border}`}}>
+                <img src={`data:image/jpeg;base64,${b.etiquette}`} alt="étiquette" style={{width:"100%",height:"100%",objectFit:"cover"}}/>
+              </div>
+            ) : (
+              <div style={{width:48,height:48,borderRadius:12,background:`linear-gradient(135deg,${b.couleur},${b.couleur}88)`,flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center",border:`1px solid ${b.couleur}44`}}>
+                <Icon name="wine"size={22}color="rgba(255,255,255,0.7)"/>
+              </div>
+            )}
             <div style={{flex:1,minWidth:0}}>
               <div style={{color:G.cream,fontFamily:"'Cormorant Garamond'",fontSize:18,fontWeight:600,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{b.nom}</div>
               <div style={{color:G.muted,fontFamily:"'Jost'",fontSize:12,marginTop:2}}>{b.domaine} · {b.millesime||"NM"}</div>
@@ -347,7 +353,7 @@ Le "resume" est une phrase de 1-2 lignes synthétisant le consensus des critique
       </div>
     </div>
   );
-
+ 
   const ViewAcqMode=()=>(
     <div style={{flex:1,overflowY:"auto",padding:"0 20px 100px"}}>
       <div style={{padding:"24px 0 8px",display:"flex",alignItems:"center",gap:12}}>
@@ -378,7 +384,7 @@ Le "resume" est une phrase de 1-2 lignes synthétisant le consensus des critique
       </div>
     </div>
   );
-
+ 
   const ViewBarcode=()=>(
     <div style={{flex:1,display:"flex",flexDirection:"column"}}>
       <div style={{padding:"20px 16px 12px",display:"flex",alignItems:"center",gap:12,flexShrink:0}}>
@@ -428,17 +434,19 @@ Le "resume" est une phrase de 1-2 lignes synthétisant le consensus des critique
       </div>
     </div>
   );
-
+ 
   const ViewLabel=()=>(
-    <div style={{flex:1,display:"flex",flexDirection:"column"}}>
-      <div style={{padding:"20px 16px 12px",display:"flex",alignItems:"center",gap:12,flexShrink:0}}>
+    <div style={{flex:1,display:"flex",flexDirection:"column",overflow:"hidden"}}>
+      <div style={{padding:"16px 16px 8px",display:"flex",alignItems:"center",gap:12,flexShrink:0}}>
         <button onClick={()=>{stopCamera();setView("acqMode");}}style={{background:"transparent",border:"none",cursor:"pointer",padding:4}}><Icon name="back"size={22}color={G.cream}/></button>
         <div>
           <div style={{color:G.gold,fontFamily:"'Jost'",fontSize:11,letterSpacing:2,textTransform:"uppercase"}}>Acquisition</div>
           <h2 style={{color:G.cream,fontFamily:"'Cormorant Garamond'",fontSize:22,fontWeight:400,fontStyle:"italic",margin:0}}>Photo étiquette</h2>
         </div>
       </div>
-      <div style={{position:"relative",margin:"0 16px",borderRadius:20,overflow:"hidden",background:"#000",aspectRatio:"3/4",flexShrink:0}}>
+ 
+      {/* Viewfinder — flex:1 pour remplir tout l'espace disponible */}
+      <div style={{position:"relative",margin:"0 16px",borderRadius:20,overflow:"hidden",background:"#000",flex:1,minHeight:0}}>
         {captured?(
           <>
             <img src={`data:image/jpeg;base64,${captured}`}style={{width:"100%",height:"100%",objectFit:"cover"}}alt="label"/>
@@ -470,22 +478,30 @@ Le "resume" est une phrase de 1-2 lignes synthétisant le consensus des critique
         )}
       </div>
       <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
-      {!captured&&!camError&&<p style={{color:G.muted,fontFamily:"'Jost'",fontSize:13,textAlign:"center",padding:"12px 28px 0",lineHeight:1.5}}>Cadrez l'étiquette dans le rectangle, puis photographiez</p>}
-      <div style={{padding:"14px 16px 20px",display:"flex",gap:10,marginTop:"auto"}}>
-        <button onClick={()=>{stopCamera();setPrefilled(false);setForm({...BLANK});setView("form");}}style={{background:G.surface,border:`1px solid ${G.border}`,borderRadius:12,padding:"13px 14px",color:G.cream,fontFamily:"'Jost'",fontSize:13,cursor:"pointer"}}>Manuel</button>
-        {captured?(
-          <button onClick={()=>{setCaptured(null);startCamera();}}style={{flex:1,background:G.surface,border:`1px solid ${G.border}`,borderRadius:12,padding:"13px",color:G.cream,fontFamily:"'Jost'",fontSize:13,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>
-            <Icon name="refresh"size={16}color={G.cream}/>Reprendre
-          </button>
-        ):(
-          <button onClick={captureLabel}disabled={!!camError}style={{flex:1,background:G.gold,border:"none",borderRadius:12,padding:"13px",color:"#fff",fontFamily:"'Jost'",fontSize:14,fontWeight:600,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:8,opacity:camError?0.4:1}}>
-            <Icon name="camera"size={18}color="#fff"/>Photographier
-          </button>
+ 
+      {/* Instruction + boutons — toujours visibles en bas */}
+      <div style={{flexShrink:0,padding:"10px 16px 16px"}}>
+        {!captured&&!camError&&(
+          <p style={{color:G.muted,fontFamily:"'Jost'",fontSize:13,textAlign:"center",margin:"0 0 10px",lineHeight:1.4}}>
+            Cadrez l'étiquette dans le rectangle, puis photographiez
+          </p>
         )}
+        <div style={{display:"flex",gap:10}}>
+          <button onClick={()=>{stopCamera();setPrefilled(false);setForm({...BLANK});setView("form");}}style={{background:G.surface,border:`1px solid ${G.border}`,borderRadius:12,padding:"13px 14px",color:G.cream,fontFamily:"'Jost'",fontSize:13,cursor:"pointer"}}>Manuel</button>
+          {captured?(
+            <button onClick={()=>{setCaptured(null);startCamera();}}style={{flex:1,background:G.surface,border:`1px solid ${G.border}`,borderRadius:12,padding:"13px",color:G.cream,fontFamily:"'Jost'",fontSize:13,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>
+              <Icon name="refresh"size={16}color={G.cream}/>Reprendre
+            </button>
+          ):(
+            <button onClick={captureLabel}disabled={!!camError}style={{flex:1,background:G.gold,border:"none",borderRadius:12,padding:"13px",color:"#fff",fontFamily:"'Jost'",fontSize:14,fontWeight:600,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:8,opacity:camError?0.4:1}}>
+              <Icon name="camera"size={18}color="#fff"/>Photographier
+            </button>
+          )}
+        </div>
       </div>
     </div>
   );
-
+ 
   const ViewForm=()=>(
     <div style={{flex:1,overflowY:"auto",padding:"0 16px 120px"}}>
       <div style={{padding:"20px 0 16px",display:"flex",alignItems:"center",gap:12}}>
@@ -530,20 +546,27 @@ Le "resume" est une phrase de 1-2 lignes synthétisant le consensus des critique
       </button>
     </div>
   );
-
+ 
   const ViewDetail=()=>{
     const b=selected;if(!b)return null;
     return(
       <div style={{flex:1,overflowY:"auto",padding:"0 0 100px"}}>
         <div style={{background:`linear-gradient(180deg,${b.couleur}22 0%,${G.bg} 100%)`,padding:"20px 16px 28px",borderBottom:`1px solid ${G.border}`}}>
           <button onClick={()=>setView("cave")}style={{background:"transparent",border:"none",cursor:"pointer",padding:4,marginBottom:12}}><Icon name="back"size={22}color="#2a1f14"/></button>
-          <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:12}}>
             <div style={{flex:1}}>
               <Tag c={typeColor(b.type)}ch={b.type}/>
               <h2 style={{color:"#2a1f14",fontFamily:"'Cormorant Garamond'",fontSize:28,fontWeight:600,margin:"10px 0 4px",fontStyle:"italic",lineHeight:1.2}}>{b.nom}</h2>
               <div style={{color:G.gold,fontFamily:"'Jost'",fontSize:13}}>{b.domaine}</div>
             </div>
-            <div style={{width:64,height:64,borderRadius:14,background:`linear-gradient(135deg,${b.couleur},${b.couleur}77)`,display:"flex",alignItems:"center",justifyContent:"center",marginLeft:12,border:`1px solid ${b.couleur}55`,flexShrink:0}}><Icon name="wine"size={30}color="rgba(255,255,255,0.65)"/></div>
+            {/* Photo étiquette si disponible, sinon icône wine */}
+            {b.etiquette ? (
+              <div style={{width:80,height:110,borderRadius:10,overflow:"hidden",flexShrink:0,border:`1px solid ${G.border}`,boxShadow:"0 4px 16px rgba(60,30,10,0.12)"}}>
+                <img src={`data:image/jpeg;base64,${b.etiquette}`} alt="étiquette" style={{width:"100%",height:"100%",objectFit:"cover"}}/>
+              </div>
+            ) : (
+              <div style={{width:64,height:64,borderRadius:14,background:`linear-gradient(135deg,${b.couleur},${b.couleur}77)`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,border:`1px solid ${b.couleur}55`}}><Icon name="wine"size={30}color="rgba(255,255,255,0.65)"/></div>
+            )}
           </div>
           <div style={{display:"flex",alignItems:"center",gap:8,marginTop:12}}><Stars n={b.note}size={16}/></div>
         </div>
@@ -570,7 +593,7 @@ Le "resume" est une phrase de 1-2 lignes synthétisant le consensus des critique
               <p style={{color:G.cream,fontFamily:"'Cormorant Garamond'",fontSize:17,fontStyle:"italic",margin:0,lineHeight:1.6}}>"{b.commentaire}"</p>
             </div>
           )}
-
+ 
           {/* ── Prix marché ── */}
           <div style={{background:G.surface,border:`1px solid ${G.border}`,borderRadius:16,padding:"16px",marginBottom:16}}>
             <div style={{color:G.gold,fontFamily:"'Jost'",fontSize:11,letterSpacing:1,textTransform:"uppercase",marginBottom:12}}>Prix marché</div>
@@ -629,7 +652,7 @@ Le "resume" est une phrase de 1-2 lignes synthétisant le consensus des critique
               </div>
             )}
           </div>
-
+ 
           {/* ── Notes des critiques ── */}
           <div style={{background:G.surface,border:`1px solid ${G.border}`,borderRadius:16,padding:"16px",marginBottom:20}}>
             <div style={{color:G.gold,fontFamily:"'Jost'",fontSize:11,letterSpacing:1,textTransform:"uppercase",marginBottom:12}}>Notes des critiques</div>
@@ -687,7 +710,7 @@ Le "resume" est une phrase de 1-2 lignes synthétisant le consensus des critique
       </div>
     );
   };
-
+ 
   const ViewReco=()=>(
     <div style={{flex:1,overflowY:"auto",padding:"0 16px 100px"}}>
       <div style={{padding:"24px 0 16px",textAlign:"center"}}>
@@ -724,7 +747,7 @@ Le "resume" est une phrase de 1-2 lignes synthétisant le consensus des critique
       )}
     </div>
   );
-
+ 
   // ── Shell ─────────────────────────────────────────────────────────────────
   const isCamera=view==="barcode"||view==="label";
   return(
